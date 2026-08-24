@@ -95,7 +95,7 @@ async function spotify<T>(
   opts: { cache?: boolean; attempts?: number; retryAfterCapMs?: number; fastFail429?: boolean } = {},
 ): Promise<T> {
   const useCache = opts.cache !== false;
-  const attempts = Math.max(1, opts.attempts ?? 4);
+  const attempts = Math.max(1, opts.attempts ?? 1);
   const retryAfterCapMs = opts.retryAfterCapMs ?? 10_000;
   const hotKey = `hot:${path}`;
   const hotHit = responseCache.get(hotKey);

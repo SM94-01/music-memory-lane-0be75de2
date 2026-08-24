@@ -63,7 +63,7 @@ function AddPage() {
         else setArtists(rankArtists(await searchSpotifyArtists(q), myGenres));
       } catch (e) { if ((e as Error).name !== "AbortError") setError("Couldn't reach Spotify."); }
       finally { setLoading(false); }
-    }, 350);
+    }, 600);
     return () => { clearTimeout(t); ctrl.abort(); };
   }, [q, mode, myGenres.join("|"), myArtists.join("|")]);
 
