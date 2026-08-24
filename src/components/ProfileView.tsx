@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { uiState } from "@/lib/ui-state";
 import { Avatar } from "@/components/Avatar";
 import { Stars } from "@/components/Stars";
 import { EditProfileDialog } from "@/components/EditProfileDialog";
@@ -32,7 +33,11 @@ export function ProfileView({ profile, fromProfile = false }: { profile: Profile
   const navigate = useNavigate();
   const qc = useQueryClient();
   const isMe = me?.id === profile.id;
-  const [tab, setTab] = useState<Tab>("posts");
+  const [tab, setTab] = useState<Tab>(uiState.profileTab);
+  function switchTab(t: Tab) {
+    uiState.profileTab = t;
+    setTab(t);
+  }
   const [editing, setEditing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -188,9 +193,9 @@ export function ProfileView({ profile, fromProfile = false }: { profile: Profile
       </div>
 
       <div className="mt-6 border-y border-border grid grid-cols-3">
-        <TabBtn active={tab === "posts"} onClick={() => setTab("posts")} icon={<Grid3x3 className="size-4" />} />
-        <TabBtn active={tab === "diary"} onClick={() => setTab("diary")} icon={<BookOpen className="size-4" />} />
-        <TabBtn active={tab === "tolisten"} onClick={() => setTab("tolisten")} icon={<ListChecks className="size-4" />} />
+        <TabBtn active={tab === "posts"} onClick={() => switchTab("posts")} icon={<Grid3x3 className="size-4" />} />
+        <TabBtn active={tab === "diary"} onClick={() => switchTab("diary")} icon={<BookOpen className="size-4" />} />
+        <TabBtn active={tab === "tolisten"} onClick={() => switchTab("tolisten")} icon={<ListChecks className="size-4" />} />
       </div>
 
       {!logs && <div className="py-8 flex justify-center"><Loader2 className="size-5 animate-spin text-muted" /></div>}

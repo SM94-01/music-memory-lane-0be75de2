@@ -32,6 +32,16 @@ export const IDENTITIES: Identity[] = [
   { key: "critic", label: "Critic", emoji: "✍️", description: "Wrote 10+ reviews.", unlocked: (s) => s.reviewsCount >= 10 },
   { key: "curator", label: "Curator", emoji: "🗂️", description: "10+ albums on the to-listen list.", unlocked: (s) => s.watchlistCount >= 10 },
   { key: "time-traveler", label: "Time Traveler", emoji: "🕰️", description: "Logged an album from before 1980.", unlocked: (s) => s.oldestYear !== null && s.oldestYear < 1980 },
+  { key: "first-spin", label: "First Spin", emoji: "🎧", description: "Logged your very first album.", unlocked: (s) => s.logsCount >= 1 },
+  { key: "getting-serious", label: "Getting Serious", emoji: "🔥", description: "Logged 10+ albums.", unlocked: (s) => s.logsCount >= 10 },
+  { key: "century-club", label: "Century Club", emoji: "💯", description: "Logged 100+ albums.", unlocked: (s) => s.logsCount >= 100 },
+  { key: "wordsmith", label: "Wordsmith", emoji: "🖋️", description: "Wrote 25+ reviews.", unlocked: (s) => s.reviewsCount >= 25 },
+  { key: "hot-take-machine", label: "Hot Take Machine", emoji: "🌶️", description: "Wrote 50+ reviews.", unlocked: (s) => s.reviewsCount >= 50 },
+  { key: "genre-hopper", label: "Genre Hopper", emoji: "🦘", description: "Logged 10+ different genres.", unlocked: (s) => s.distinctGenres >= 10 },
+  { key: "archivist", label: "Archivist", emoji: "🏛️", description: "Logged an album from before 1970.", unlocked: (s) => s.oldestYear !== null && s.oldestYear < 1970 },
+  { key: "superfan", label: "Superfan", emoji: "🤩", description: "10+ albums from one artist.", unlocked: (s) => s.topArtistCount >= 10 },
+  { key: "list-hoarder", label: "List Hoarder", emoji: "🗃️", description: "30+ albums on the to-listen list.", unlocked: (s) => s.watchlistCount >= 30 },
+  { key: "encyclopedia", label: "Encyclopedia", emoji: "📖", description: "Logged 40+ different artists.", unlocked: (s) => s.distinctArtists >= 40 },
 ];
 
 export function identityByKey(key: string | null | undefined): Identity | undefined {

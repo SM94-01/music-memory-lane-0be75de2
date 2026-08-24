@@ -11,6 +11,7 @@ export type SpotifyAlbum = {
   id: string;
   title: string;
   artist: string;
+  artist_id?: string | null;
   year: number | null;
   cover: string | null;
   genre: string | null;
@@ -45,8 +46,8 @@ export async function searchSpotifyArtists(query: string) {
   return result.artists;
 }
 
-export async function searchSpotifyByGenre(kind: "albums" | "artists", genre: string) {
-  const result = await invokeSpotify<{ albums?: SpotifyAlbum[]; artists?: SpotifyArtist[] }>({ action: "genre", kind, genre, limit: 10 });
+export async function searchSpotifyByGenre(kind: "albums" | "artists", genre: string, limit = 20) {
+  const result = await invokeSpotify<{ albums?: SpotifyAlbum[]; artists?: SpotifyArtist[] }>({ action: "genre", kind, genre, limit });
   return kind === "albums" ? result.albums ?? [] : result.artists ?? [];
 }
 
@@ -63,4 +64,8 @@ export async function getSpotifyAlbum(id: string) {
 export async function getSpotifyArtist(id: string) {
   const result = await invokeSpotify<{ artist: SpotifyArtist }>({ action: "artist", id });
   return result.artist;
+}
+export async function getSpotifyNewReleases(limit = 5) {
+  const result = await invokeSpotify<{ albums: SpotifyAlbum[] }>({ action: "newReleases", limit });
+  return result.albums ?? [];
 }

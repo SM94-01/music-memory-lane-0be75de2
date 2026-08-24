@@ -60,7 +60,7 @@ function AuthPage() {
       <section className="max-w-md mx-auto w-full">
         <div className="mb-10 flex flex-col items-center text-center">
           <Logo className="h-40 w-auto mb-4" />
-          <p className="text-sm text-muted mt-1">Track your music journey.</p>
+          <p className="text-sm text-muted mt-1">Track your music journey</p>
         </div>
 
         <div className="flex gap-1 p-1 bg-secondary/60 rounded-full mb-6">
@@ -137,8 +137,8 @@ function AuthPage() {
         </form>
 
         <p className="text-[11px] text-muted text-center mt-6 leading-relaxed">
-          By continuing you agree to share your music taste with the world.
-          <br />Your reviews stay yours.
+          By continuing you agree to share your music taste with the world
+          <br />Your reviews stay yours
         </p>
       </section>
     </main>

@@ -18,6 +18,11 @@ export function MobileShell({ children, hideNav = false }: { children: ReactNode
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Always show a newly opened page from the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/auth", replace: true });
   }, [loading, session, navigate]);

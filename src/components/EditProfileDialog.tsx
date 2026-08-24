@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Profile } from "@/lib/auth";
-import { ChevronDown, Loader2, X } from "lucide-react";
+import { ChevronDown, Loader2, Lock, X } from "lucide-react";
 import { IDENTITIES, computeTasteStats, identityByKey } from "@/lib/identities";
 
 export function EditProfileDialog({ profile, onClose }: { profile: Profile; onClose: () => void }) {
@@ -58,78 +58,87 @@ export function EditProfileDialog({ profile, onClose }: { profile: Profile; onCl
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-background">
-      <div className="h-full overflow-y-auto">
-      <div className="max-w-md mx-auto px-5 py-6">
-        <div className="flex items-center justify-between mb-6">
+    <div className="fixed inset-0 z-[100] flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-background/80" />
+      <div
+        className="relative w-full max-w-md mx-auto bg-background border-t border-border rounded-t-2xl animate-in slide-in-from-bottom duration-200 flex flex-col"
+        style={{ maxHeight: "92%" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 pb-3">
           <h2 className="text-xl font-extrabold tracking-tight">Edit profile</h2>
           <button onClick={onClose} className="p-2 -m-2"><X className="size-5" /></button>
         </div>
-        <p className="text-[10px] font-mono uppercase tracking-widest text-muted mb-4">
-          Tap your avatar on the profile to change your photo.
-        </p>
-        <div className="space-y-4">
-          <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className={inp} /></Field>
-          <Field label="Handle"><input value={handle} onChange={(e) => setHandle(e.target.value)} className={inp} /></Field>
+        <div className="overflow-y-auto px-5 pb-10">
+          <p className="text-[10px] font-mono uppercase tracking-widest text-muted mb-4">
+            Tap your avatar on the profile to change your photo.
+          </p>
+          <div className="space-y-4">
+            <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className={inp} /></Field>
+            <Field label="Handle"><input value={handle} onChange={(e) => setHandle(e.target.value)} className={inp} /></Field>
 
-          <div>
-            <span className="text-[9px] font-mono uppercase tracking-widest text-muted mb-1.5 block">
-              Identity {stats && <span className="text-accent ml-1">— {unlockedCount}/{IDENTITIES.length} unlocked</span>}
-            </span>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIdentityOpen((v) => !v)}
-                className="w-full flex items-center gap-3 rounded-sm border border-border bg-secondary/40 px-3 py-2.5 text-left"
-              >
-                <span className="text-lg leading-none">{selectedIdentity.emoji}</span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-bold">{selectedIdentity.label}</span>
-                  <span className="block text-[11px] text-muted truncate">{selectedIdentity.description}</span>
-                </span>
-                <ChevronDown className={`size-4 text-muted transition-transform ${identityOpen ? "rotate-180" : ""}`} />
-              </button>
+            <div>
+              <span className="text-[9px] font-mono uppercase tracking-widest text-muted mb-1.5 block">
+                Identity {stats && <span className="text-accent ml-1">— {unlockedCount}/{IDENTITIES.length} unlocked</span>}
+              </span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIdentityOpen((v) => !v)}
+                  className="w-full flex items-center gap-3 rounded-sm border border-border bg-secondary/40 px-3 py-2.5 text-left"
+                >
+                  <span className="text-lg leading-none">{selectedIdentity.emoji}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-bold">{selectedIdentity.label}</span>
+                    <span className="block text-[11px] text-muted truncate">{selectedIdentity.description}</span>
+                  </span>
+                  <ChevronDown className={`size-4 text-muted transition-transform ${identityOpen ? "rotate-180" : ""}`} />
+                </button>
 
-              {identityOpen && (
-                <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 max-h-64 overflow-y-auto rounded-sm border border-border bg-background shadow-lg divide-y divide-border">
-                  {unlockedIdentities.map((i) => {
-                    const selected = identity === i.key;
-                    return (
-                      <button
-                        key={i.key}
-                        type="button"
-                        onClick={() => { setIdentity(i.key); setIdentityOpen(false); }}
-                        className={`w-full text-left flex items-start gap-3 px-3 py-2.5 transition-colors ${
-                          selected ? "bg-accent/10" : "hover:bg-accent/5"
-                        }`}
-                      >
-                        <span className="text-lg leading-none pt-0.5">{i.emoji}</span>
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-bold">{i.label}</span>
-                          <span className="block text-[11px] text-muted">{i.description}</span>
-                        </span>
-                        {selected && <span className="text-[9px] font-mono uppercase tracking-widest text-accent shrink-0 pt-1">Active</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                {identityOpen && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 max-h-64 overflow-y-auto rounded-sm border border-border bg-background shadow-lg divide-y divide-border">
+                    {[...IDENTITIES].sort((a, b) => Number(isUnlocked(b.key)) - Number(isUnlocked(a.key))).map((i) => {
+                      const selected = identity === i.key;
+                      const locked = !isUnlocked(i.key);
+                      return (
+                        <button
+                          key={i.key}
+                          type="button"
+                          disabled={locked}
+                          onClick={() => { if (locked) return; setIdentity(i.key); setIdentityOpen(false); }}
+                          className={`w-full text-left flex items-start gap-3 px-3 py-2.5 transition-colors ${
+                            locked ? "opacity-45 cursor-not-allowed" : selected ? "bg-accent/10" : "hover:bg-accent/5"
+                          }`}
+                        >
+                          <span className="text-lg leading-none pt-0.5">{i.emoji}</span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-bold">{i.label}</span>
+                            <span className="block text-[11px] text-muted">{i.description}</span>
+                          </span>
+                          {locked ? (
+                            <Lock className="size-3.5 text-muted shrink-0 mt-1" />
+                          ) : selected ? (
+                            <span className="text-[9px] font-mono uppercase tracking-widest text-accent shrink-0 pt-1">Active</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <p className="mt-1.5 text-[10px] text-muted">Unlock more identities by logging albums, writing reviews, and building your list.</p>
             </div>
-            <p className="mt-1.5 text-[10px] text-muted">Unlock more identities by logging albums, writing reviews, and building your list.</p>
+
+            <Field label="Short bio"><input maxLength={80} value={bioShort} onChange={(e) => setBioShort(e.target.value)} className={inp} /></Field>
+            <Field label="Long bio">
+              <textarea value={bioLong} onChange={(e) => setBioLong(e.target.value)} rows={4} className={`${inp} resize-none`} />
+            </Field>
+            {err && <p className="text-xs text-destructive">{err}</p>}
+            <button onClick={save} disabled={busy} className="w-full bg-accent text-accent-foreground py-3 rounded-full text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
+              {busy && <Loader2 className="size-4 animate-spin" />} Save changes
+            </button>
           </div>
-
-
-
-          <Field label="Short bio"><input maxLength={80} value={bioShort} onChange={(e) => setBioShort(e.target.value)} className={inp} /></Field>
-          <Field label="Long bio">
-            <textarea value={bioLong} onChange={(e) => setBioLong(e.target.value)} rows={4} className={`${inp} resize-none`} />
-          </Field>
-          {err && <p className="text-xs text-destructive">{err}</p>}
-          <button onClick={save} disabled={busy} className="w-full bg-accent text-accent-foreground py-3 rounded-full text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
-            {busy && <Loader2 className="size-4 animate-spin" />} Save changes
-          </button>
         </div>
-      </div>
       </div>
     </div>
   );

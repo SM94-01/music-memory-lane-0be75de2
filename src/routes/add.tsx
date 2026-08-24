@@ -8,7 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useMyProfile } from "@/lib/auth";
 import { fetchTasteFingerprint } from "@/lib/taste";
 import { AlbumCover } from "@/components/AlbumCover";
-import { searchSpotifyAlbums, searchSpotifyArtists, searchSpotifyByGenre, getSpotifyFeatured, type SpotifyAlbum, type SpotifyArtist } from "@/lib/spotify";
+import { searchSpotifyAlbums, searchSpotifyArtists, searchSpotifyByGenre, getSpotifyFeatured, getSpotifyNewReleases, type SpotifyAlbum, type SpotifyArtist } from "@/lib/spotify";
+import { uiState } from "@/lib/ui-state";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/add")({
   head: () => ({ meta: [{ title: "Add music — TraX" }] }),
@@ -18,13 +20,23 @@ export const Route = createFileRoute("/add")({
 type Mode = "albums" | "artists" | "genres";
 
 function AddPage() {
-  const [mode, setMode] = useState<Mode>("albums");
+  const [mode, setMode] = useState<Mode>(uiState.addMode);
+  const switchMode = (m: Mode) => {
+    uiState.addMode = m;
+    setMode(m);
+    setQ("");
+    setSelectedGenre(null);
+  };
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [albums, setAlbums] = useState<SpotifyAlbum[]>([]);
   const [artists, setArtists] = useState<SpotifyArtist[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedGenre, setSelectedGenreState] = useState<string | null>(uiState.addGenre);
+  const setSelectedGenre = (g: string | null) => {
+    uiState.addGenre = g;
+    setSelectedGenreState(g);
+  };
   const abortRef = useRef<AbortController | null>(null);
 
   const { data: me } = useMyProfile();
@@ -36,7 +48,8 @@ function AddPage() {
   const myGenres = taste?.topGenres ?? [];
   const myArtists = taste?.topArtists ?? [];
 
-  useEffect(() => { setQ(""); setSelectedGenre(null); }, [mode]);
+  // mode-switch reset is handled in switchMode; no mount-time reset so the
+  // persisted tab/genre survive navigation back from a detail page.
 
   useEffect(() => {
     if (mode === "genres") return;
@@ -57,8 +70,7 @@ function AddPage() {
   return (
     <MobileShell>
       <div className="px-5 pt-5">
-        <h1 className="text-3xl font-extrabold tracking-tighter mb-1">Add music</h1>
-        <p className="text-sm text-muted mb-5">Search Spotify's album catalog.</p>
+        <h1 className="text-3xl font-extrabold tracking-tighter mb-5">Add music</h1>
 
         {mode !== "genres" || selectedGenre === null ? (
           <label className="flex items-center gap-3 border border-border rounded-full px-4 py-3 bg-secondary/40 focus-within:border-accent">
@@ -73,9 +85,9 @@ function AddPage() {
         ) : null}
 
         <div className="flex gap-1 p-1 bg-secondary/60 rounded-full mt-4">
-          <ModeBtn active={mode === "albums"} onClick={() => setMode("albums")} icon={<Disc3 className="size-3.5" />}>Albums</ModeBtn>
-          <ModeBtn active={mode === "artists"} onClick={() => setMode("artists")} icon={<Mic2 className="size-3.5" />}>Artists</ModeBtn>
-          <ModeBtn active={mode === "genres"} onClick={() => setMode("genres")} icon={<Tag className="size-3.5" />}>Genres</ModeBtn>
+          <ModeBtn active={mode === "albums"} onClick={() => switchMode("albums")} icon={<Disc3 className="size-3.5" />}>Albums</ModeBtn>
+          <ModeBtn active={mode === "artists"} onClick={() => switchMode("artists")} icon={<Mic2 className="size-3.5" />}>Artists</ModeBtn>
+          <ModeBtn active={mode === "genres"} onClick={() => switchMode("genres")} icon={<Tag className="size-3.5" />}>Genres</ModeBtn>
         </div>
       </div>
 
@@ -115,24 +127,36 @@ function rankArtists(items: SpotifyArtist[], genres: string[]) {
 
 function SuggestedFeed({ kind, genres }: { kind: "albums" | "artists"; genres: string[] }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["suggested-spotify", kind, genres.join("|")],
+    queryKey: ["suggested-mix", kind, genres.join("|")],
     queryFn: async () => {
+      // 1) Taste-based picks from Spotify (top genres)
+      const tastePicks: any[] = [];
       if (genres.length > 0) {
-        // Merge results from top genres for variety
         const picks = genres.slice(0, 3);
-        const chunks = await Promise.all(picks.map((g) => searchSpotifyByGenre(kind, g)));
-        const seen = new Set<string>();
-        const merged: any[] = [];
-        for (const chunk of chunks) {
-          for (const it of chunk) {
-            if (seen.has(it.id)) continue;
-            seen.add(it.id);
-            merged.push(it);
-          }
-        }
-        if (merged.length) return merged;
+        const chunks = await Promise.all(picks.map((g) => searchSpotifyByGenre(kind, g).catch(() => [])));
+        for (const chunk of chunks) tastePicks.push(...chunk);
       }
-      return getSpotifyFeatured(kind);
+      // 2) Community favourites — most logged albums / most logged artists on TraX
+      const communityPicks = await fetchCommunityTop(kind);
+      // 3) Fallback popular from Spotify to fill the feed
+      const fallback = tastePicks.length + communityPicks.length < 8
+        ? await getSpotifyFeatured(kind).catch(() => [])
+        : [];
+      // Interleave taste + community, then top up with fallback
+      const merged: any[] = [];
+      const maxLen = Math.max(tastePicks.length, communityPicks.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (tastePicks[i]) merged.push(tastePicks[i]);
+        if (communityPicks[i]) merged.push(communityPicks[i]);
+      }
+      merged.push(...fallback);
+      const seen = new Set<string>();
+      return merged.filter((it) => {
+        const k = kind === "albums" ? it.id : it.id;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }).slice(0, 10);
     },
   });
 
@@ -140,15 +164,65 @@ function SuggestedFeed({ kind, genres }: { kind: "albums" | "artists"; genres: s
   const items = (data as any[]) ?? [];
   return (
     <>
+      {kind === "albums" && <NewReleases />}
       <h3 className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3 flex items-center gap-1.5">
         <Sparkles className="size-3" />
-        {genres.length > 0 ? `Suggested ${kind} for you` : `Popular ${kind} right now`}
+        Trending on TraX
       </h3>
       {kind === "albums"
         ? <AlbumResults items={items as SpotifyAlbum[]} empty={false} />
         : <ArtistResults items={items as SpotifyArtist[]} empty={false} />}
     </>
   );
+}
+
+function NewReleases() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["new-releases"],
+    queryFn: () => getSpotifyNewReleases(5),
+  });
+  const items = data ?? [];
+  if (isLoading) return <div className="py-4 flex justify-center"><Loader2 className="size-4 animate-spin text-muted" /></div>;
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-7">
+      <h3 className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3 flex items-center gap-1.5">
+        <Sparkles className="size-3" />
+        New releases
+      </h3>
+      <AlbumResults items={items} empty={false} />
+    </div>
+  );
+}
+
+
+// Fetch top logged albums or artists on the TraX community
+async function fetchCommunityTop(kind: "albums" | "artists"): Promise<any[]> {
+  const { data } = await supabase
+    .from("album_logs")
+    .select("album_key, title, artist, year, cover_url, genre")
+    .order("listened_at", { ascending: false })
+    .limit(500);
+  if (!data) return [];
+  if (kind === "albums") {
+    const counts = new Map<string, { count: number; item: any }>();
+    for (const r of data) {
+      const cur = counts.get(r.album_key);
+      if (cur) cur.count += 1;
+      else counts.set(r.album_key, { count: 1, item: {
+        id: r.album_key, title: r.title, artist: r.artist,
+        year: r.year, cover: r.cover_url, genre: r.genre,
+      } });
+    }
+    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 15).map((v) => v.item);
+  }
+  // artists: group by artist name — no spotify id available from logs, skip if we lack one
+  const counts = new Map<string, number>();
+  for (const r of data) counts.set(r.artist, (counts.get(r.artist) ?? 0) + 1);
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  // Resolve names → Spotify artists
+  const resolved = await Promise.all(top.map((name) => searchSpotifyArtists(name).then((r) => r[0]).catch(() => null)));
+  return resolved.filter(Boolean) as any[];
 }
 
 function AlbumResults({ items, empty }: { items: SpotifyAlbum[]; empty: boolean }) {

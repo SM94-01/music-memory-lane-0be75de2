@@ -5,24 +5,51 @@ import { useNavigate } from "@tanstack/react-router";
 import { THEMES, useTheme } from "@/lib/theme";
 
 
-type Prefs = { new_follower: boolean; likes: boolean; comments: boolean; album_shares: boolean };
+type Prefs = {
+  new_follower: boolean;
+  likes: boolean;
+  comments: boolean;
+  album_shares: boolean;
+  watchlist_reminders: boolean;
+  inactivity_reminders: boolean;
+};
 
 export function SettingsSheet({ profileId, onClose }: { profileId: string; onClose: () => void }) {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const [prefs, setPrefs] = useState<Prefs>({ new_follower: true, likes: true, comments: true, album_shares: true });
+  const [prefs, setPrefs] = useState<Prefs>({
+    new_follower: true,
+    likes: true,
+    comments: true,
+    album_shares: true,
+    watchlist_reminders: true,
+    inactivity_reminders: true,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("notification_prefs").select("new_follower, likes, comments, album_shares").eq("user_id", profileId).maybeSingle();
-      if (data) setPrefs({ new_follower: data.new_follower, likes: data.likes, comments: data.comments, album_shares: (data as any).album_shares ?? true });
+      const { data } = await supabase
+        .from("notification_prefs")
+        .select("new_follower, likes, comments, album_shares, watchlist_reminders, inactivity_reminders")
+        .eq("user_id", profileId)
+        .maybeSingle();
+      if (data)
+        setPrefs({
+          new_follower: data.new_follower,
+          likes: data.likes,
+          comments: data.comments,
+          album_shares: (data as any).album_shares ?? true,
+          watchlist_reminders: (data as any).watchlist_reminders ?? true,
+          inactivity_reminders: (data as any).inactivity_reminders ?? true,
+        });
       setLoading(false);
     })();
   }, [profileId]);
 
   async function toggle(key: keyof Prefs) {
-    const next = { ...prefs, [key]: !prefs[key] };
+    // reminders are always on and cannot be disabled
+    const next = { ...prefs, [key]: !prefs[key], watchlist_reminders: true, inactivity_reminders: true };
     setPrefs(next);
     await supabase.from("notification_prefs").upsert({ user_id: profileId, ...next, updated_at: new Date().toISOString() });
   }
@@ -90,9 +117,9 @@ export function SettingsSheet({ profileId, onClose }: { profileId: string; onClo
               alert("Delete failed: " + (e?.message ?? "unknown"));
             }
           }}
-          className="mt-2 w-full py-3 rounded-full text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 text-destructive hover:bg-destructive/10"
+          className="mt-3 mx-auto block py-2 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest text-destructive hover:bg-destructive/10"
         >
-          <Trash2 className="size-4" /> Delete account
+          <span className="flex items-center gap-1.5"><Trash2 className="size-3" /> Delete account</span>
         </button>
       </div>
     </div>

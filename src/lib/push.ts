@@ -62,6 +62,11 @@ export async function initPushNotifications(): Promise<void> {
 
     PushNotifications.addListener("pushNotificationActionPerformed", (a) => {
       console.log("[push] action", a);
+      const data = (a.notification?.data ?? {}) as Record<string, string>;
+      let path: string | null = null;
+      if (data.type === "rediscover") path = "/rediscover";
+      else if (data.type === "watchlist" && data.album_key) path = `/album/${data.album_key}`;
+      if (path) window.dispatchEvent(new CustomEvent("trax:navigate", { detail: path }));
     });
 
     // 3. Register

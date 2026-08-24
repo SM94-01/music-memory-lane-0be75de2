@@ -229,6 +229,65 @@ export type Database = {
           },
         ]
       }
+      hidden_notifications: {
+        Row: {
+          created_at: string
+          notif_key: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          notif_key: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          notif_key?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hidden_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hidden_threads: {
+        Row: {
+          hidden_at: string
+          peer_id: string
+          user_id: string
+        }
+        Insert: {
+          hidden_at?: string
+          peer_id: string
+          user_id: string
+        }
+        Update: {
+          hidden_at?: string
+          peer_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hidden_threads_peer_id_fkey"
+            columns: ["peer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hidden_threads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       identity_unlocks: {
         Row: {
           id: string
@@ -337,26 +396,32 @@ export type Database = {
         Row: {
           album_shares: boolean
           comments: boolean
+          inactivity_reminders: boolean
           likes: boolean
           new_follower: boolean
           updated_at: string
           user_id: string
+          watchlist_reminders: boolean
         }
         Insert: {
           album_shares?: boolean
           comments?: boolean
+          inactivity_reminders?: boolean
           likes?: boolean
           new_follower?: boolean
           updated_at?: string
           user_id: string
+          watchlist_reminders?: boolean
         }
         Update: {
           album_shares?: boolean
           comments?: boolean
+          inactivity_reminders?: boolean
           likes?: boolean
           new_follower?: boolean
           updated_at?: string
           user_id?: string
+          watchlist_reminders?: boolean
         }
         Relationships: [
           {
@@ -409,6 +474,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      reminder_sends: {
+        Row: {
+          id: string
+          kind: string
+          ref: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          kind: string
+          ref?: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          kind?: string
+          ref?: string
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_sends_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_push_tokens: {
         Row: {

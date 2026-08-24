@@ -54,7 +54,7 @@ function ArtistPage() {
 
         <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-accent mb-3">Albums</h2>
         <div className="grid grid-cols-2 gap-3">
-          {(info.albums ?? []).slice(0, 30).map((album) => (
+          {(info.albums ?? []).map((album) => (
             <Link to="/album/$id" params={{ id: album.id }} key={album.id}>
               <div className="aspect-square w-full rounded-xs overflow-hidden bg-secondary [container-type:inline-size]">
                 <AlbumCover src={album.cover} title={album.title} artist={album.artist} className="size-full" />

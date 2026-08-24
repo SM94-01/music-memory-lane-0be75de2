@@ -3,7 +3,7 @@ import { MobileShell } from "@/components/MobileShell";
 import { Stars } from "@/components/Stars";
 import { Avatar } from "@/components/Avatar";
 import { CommentsSheet } from "@/components/CommentsSheet";
-import { Bell, Heart, MessageCircle, TrendingUp, UserPlus, Loader2, Send, X } from "lucide-react";
+import { Bell, Heart, MessageCircle, Loader2, Send, X, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyProfile } from "@/lib/auth";
@@ -12,6 +12,9 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { mockCoverFor } from "@/data/mock";
 import { AlbumCover } from "@/components/AlbumCover";
 import { notificationService } from "@/lib/notifications";
+import { fetchTasteFingerprint } from "@/lib/taste";
+import { searchSpotifyByGenre, searchSpotifyArtists, getSpotifyArtist } from "@/lib/spotify";
+import { uiState } from "@/lib/ui-state";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Explore — TraX" }] }),
@@ -21,7 +24,11 @@ export const Route = createFileRoute("/")({
 type Tab = "following" | "suggested";
 
 function ExplorePage() {
-  const [tab, setTab] = useState<Tab>("following");
+  const [tab, setTab] = useState<Tab>(uiState.exploreTab);
+  const switchTab = (t: Tab) => {
+    uiState.exploreTab = t;
+    setTab(t);
+  };
   return (
     <MobileShell>
       <div className="px-5 pt-5">
@@ -36,11 +43,11 @@ function ExplorePage() {
           </Link>
         </div>
         <div className="flex gap-1 p-1 bg-secondary/60 rounded-full mb-6">
-          <TabBtn active={tab === "following"} onClick={() => setTab("following")}>Following</TabBtn>
-          <TabBtn active={tab === "suggested"} onClick={() => setTab("suggested")}>Suggested</TabBtn>
+          <TabBtn active={tab === "following"} onClick={() => switchTab("following")}>Following</TabBtn>
+          <TabBtn active={tab === "suggested"} onClick={() => switchTab("suggested")}>Suggested</TabBtn>
         </div>
       </div>
-      {tab === "following" ? <FollowingFeed onDiscover={() => setTab("suggested")} /> : <SuggestedTab />}
+      {tab === "following" ? <FollowingFeed onDiscover={() => switchTab("suggested")} /> : <SuggestedTab />}
     </MobileShell>
   );
 }
@@ -64,32 +71,39 @@ type LogRow = {
 
 function FollowingFeed({ onDiscover }: { onDiscover: () => void }) {
   const { data: me } = useMyProfile();
-  const { data: feed, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["feed", me?.id],
     enabled: !!me,
     queryFn: async () => {
       const { data: follows } = await supabase.from("follows").select("following_id").eq("follower_id", me!.id);
       const ids = (follows ?? []).map((f) => f.following_id);
-      if (ids.length === 0) return [] as LogRow[];
+      if (ids.length === 0) return { followingCount: 0, logs: [] as LogRow[] };
       const { data } = await supabase
         .from("album_logs")
         .select("id, album_key, title, artist, year, cover_url, genre, rating, review, created_at, user:profiles!album_logs_user_id_fkey(id, handle, name, avatar_url), likes(count), comments(count)")
         .in("user_id", ids)
         .order("created_at", { ascending: false })
         .limit(30);
-      return (data as unknown as LogRow[]) ?? [];
+      return { followingCount: ids.length, logs: (data as unknown as LogRow[]) ?? [] };
     },
   });
+  const feed = data?.logs;
 
   if (isLoading) return <div className="px-5"><Loader2 className="size-5 animate-spin text-muted" /></div>;
   if (!feed || feed.length === 0) {
+    const following = (data?.followingCount ?? 0) > 0;
     return (
       <div className="px-5 text-center py-12">
-        <p className="text-sm text-muted mb-4">You're not following anyone yet.</p>
+        <p className="text-sm text-muted mb-4">
+          {following
+            ? "Nobody you follow has logged an album yet."
+            : "You're not following anyone yet."}
+        </p>
         <button onClick={onDiscover} className="text-xs font-mono uppercase tracking-widest text-accent">Discover people →</button>
       </div>
     );
   }
+
 
   return (
     <section className="px-5 space-y-12 mt-2">
@@ -180,89 +194,213 @@ function FeedCard({ item }: { item: LogRow }) {
 
 function SuggestedTab() {
   const { data: me } = useMyProfile();
-  const { data: users } = useQuery({
-    queryKey: ["suggestedUsers", me?.id],
+  const { data: taste } = useQuery({
+    queryKey: ["taste", me?.id],
     enabled: !!me,
-    queryFn: async () => {
-      // 1) my taste fingerprint
-      const { data: myLogs } = await supabase.from("album_logs").select("genre, artist").eq("user_id", me!.id);
-      const myGenres = new Set<string>();
-      const myArtists = new Set<string>();
-      (myLogs ?? []).forEach((l) => { if (l.genre) myGenres.add(l.genre.toLowerCase()); if (l.artist) myArtists.add(l.artist.toLowerCase()); });
+    queryFn: () => fetchTasteFingerprint(me!.id),
+  });
+  const loggedGenres = usableSpotifyGenres(taste?.topGenres ?? []);
+  const topArtists = taste?.topArtists ?? [];
 
-      // 2) candidates: not me, not already followed
+  // Many logs have no genre attached — derive genres from the user's logged artists instead.
+  const { data: derivedGenres } = useQuery({
+    queryKey: ["taste-derived-genres", topArtists.join("|")],
+    enabled: loggedGenres.length === 0 && topArtists.length > 0,
+    queryFn: async () => {
+      const res = await Promise.all(
+        topArtists.slice(0, 3).map((name) =>
+          searchSpotifyArtists(name)
+            .then((r) => {
+              const exact = r.find((a) => a.name.toLowerCase() === name);
+              return [...(exact?.genres ?? []), ...r.slice(0, 3).flatMap((a) => a.genres ?? [])];
+            })
+            .catch(() => [] as string[]),
+        ),
+      );
+
+      return usableSpotifyGenres(res.flat());
+    },
+  });
+
+  const topGenres = (loggedGenres.length > 0 ? loggedGenres : derivedGenres ?? []).slice(0, 3);
+  const hasTaste = topArtists.length > 0 || loggedGenres.length > 0;
+
+  const { data: similarUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ["suggested-similar-users", me?.id, topGenres.join("|"), topArtists.join("|")],
+    enabled: !!me && hasTaste,
+    queryFn: async () => {
       const { data: follows } = await supabase.from("follows").select("following_id").eq("follower_id", me!.id);
-      const followedIds = new Set((follows ?? []).map((f) => f.following_id));
-      followedIds.add(me!.id);
-      const { data: candidates } = await supabase.from("profiles").select("id, handle, name, identity, avatar_url").limit(60);
-      const pool = (candidates ?? []).filter((u) => !followedIds.has(u.id));
-      if (pool.length === 0) return [];
-
-      // 3) score each candidate by genre/artist overlap
-      const ids = pool.map((u) => u.id);
-      const { data: theirLogs } = await supabase.from("album_logs").select("user_id, genre, artist").in("user_id", ids);
-      const scoreById = new Map<string, number>();
-      (theirLogs ?? []).forEach((l) => {
-        let s = 0;
-        if (l.genre && myGenres.has(l.genre.toLowerCase())) s += 2;
-        if (l.artist && myArtists.has(l.artist.toLowerCase())) s += 3;
-        scoreById.set(l.user_id, (scoreById.get(l.user_id) ?? 0) + s);
-      });
-      const scored = pool.map((u) => ({ ...u, _score: scoreById.get(u.id) ?? 0 }));
-      // tie-break: a tiny stable random based on id so empty-taste users still get an order
-      scored.sort((a, b) => b._score - a._score || a.handle.localeCompare(b.handle));
-      return scored.slice(0, 20);
-    },
-  });
-  const { data: trending } = useQuery({
-    queryKey: ["trending"],
-    queryFn: async () => {
-      const { data } = await supabase
+      const excluded = new Set<string>([me!.id, ...(follows ?? []).map((f) => f.following_id)]);
+      const { data: logs } = await supabase
         .from("album_logs")
-        .select("album_key, title, artist, year, cover_url, rating")
-        .not("rating", "is", null)
-        .order("rating", { ascending: false })
-        .limit(10);
-      const seen = new Set<string>();
-      return (data ?? []).filter((a) => (seen.has(a.album_key) ? false : (seen.add(a.album_key), true)));
+        .select("user_id, genre, artist")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      const genreSet = new Set(topGenres);
+      const artistSet = new Set(topArtists);
+      const scoreMap = new Map<string, number>();
+      (logs ?? []).forEach((l) => {
+        if (!l.user_id || excluded.has(l.user_id)) return;
+        let s = 0;
+        if (l.genre && genreSet.has(l.genre.toLowerCase())) s += 2;
+        if (l.artist && artistSet.has(l.artist.toLowerCase())) s += 3;
+        scoreMap.set(l.user_id, (scoreMap.get(l.user_id) ?? 0) + s);
+      });
+      let top = [...scoreMap.entries()].filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (top.length === 0) {
+        // Fallback: suggest the most active listeners the user doesn't follow yet.
+        const counts = new Map<string, number>();
+        (logs ?? []).forEach((l) => {
+          if (!l.user_id || excluded.has(l.user_id)) return;
+          counts.set(l.user_id, (counts.get(l.user_id) ?? 0) + 1);
+        });
+        top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => [id, 0] as [string, number]);
+      }
+      if (top.length === 0) {
+        // Nobody has logged yet — surface recent members instead of an empty list.
+        const { data: recent } = await supabase
+          .from("profiles")
+          .select("id, handle, name, identity, avatar_url")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        return (recent ?? [])
+          .filter((p) => !excluded.has(p.id))
+          .slice(0, 5)
+          .map((user) => ({ user, score: 0 }));
+      }
+      const ids = top.map(([id]) => id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, handle, name, identity, avatar_url")
+        .in("id", ids);
+      return top
+        .map(([id, score]) => ({ user: (profiles ?? []).find((p) => p.id === id), score }))
+        .filter((x) => x.user) as { user: any; score: number }[];
     },
   });
+
+  const { data: genreAlbums, isLoading: albumsLoading } = useQuery({
+    queryKey: ["suggested-genre-albums", topGenres.join("|"), topArtists.join("|")],
+    enabled: hasTaste,
+    queryFn: async () => {
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      const push = (list: any[]) => {
+        for (const a of list) if (a?.id && !seen.has(a.id)) { seen.add(a.id); merged.push(a); }
+      };
+      if (topGenres.length > 0) {
+        const chunks = await Promise.all(topGenres.slice(0, 3).map((g) => searchSpotifyByGenre("albums", g, 12).catch(() => [])));
+        chunks.forEach((c) => push(c as any[]));
+      } else {
+        // No genre data yet — fall back to more from the artists the user already logged.
+        const chunks = await Promise.all(
+          topArtists.slice(0, 3).map(async (name) => {
+            const found = await searchSpotifyArtists(name).catch(() => []);
+            const exact = found.find((a) => a.name.toLowerCase() === name) ?? found[0];
+            if (!exact) return [];
+            const artist = await getSpotifyArtist(exact.id).catch(() => null);
+            return artist?.albums ?? [];
+          }),
+        );
+        chunks.forEach((c) => push(c as any[]));
+      }
+      return merged.slice(0, 10);
+    },
+  });
+  const { data: genreArtists, isLoading: artistsLoading } = useQuery({
+    queryKey: ["suggested-genre-artists", topGenres.join("|")],
+    enabled: topGenres.length > 0,
+    queryFn: async () => {
+      const chunks = await Promise.all(topGenres.slice(0, 3).map((g) => searchSpotifyByGenre("artists", g, 12).catch(() => [])));
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const c of chunks) for (const a of c as any[]) if (!seen.has(a.id)) { seen.add(a.id); merged.push(a); }
+      return merged.slice(0, 10);
+    },
+  });
+
+
+
 
   return (
     <section className="mt-2">
-      <SharedWithYou />
-      <div className="px-5 mb-8">
-        <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-accent mb-3">
-          <TrendingUp className="size-3.5" /> People to follow
+      {!hasTaste ? (
+        <div className="px-5">
+          <p className="text-sm text-muted">Log a few albums to unlock personalised suggestions.</p>
         </div>
-        {users && users.length === 0 ? (
-          <p className="text-sm text-muted">You already follow everyone we suggest. Nice taste.</p>
-        ) : (
-          <ul className="space-y-3">
-            {users?.map((u) => <SuggestedUser key={u.id} user={u} score={(u as any)._score ?? 0} />)}
-          </ul>
-        )}
-      </div>
+      ) : (
+        <>
+          <div className="px-5 mb-8">
+            <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-accent mb-4">People with your taste</h2>
+            {usersLoading ? <Loader2 className="size-5 animate-spin text-muted" /> : (
+              <ul className="space-y-4">
+                {(similarUsers ?? []).map(({ user, score }) => (
+                  <SuggestedUser key={user.id} user={user} score={score} />
+                ))}
+                {similarUsers?.length === 0 && <li className="text-sm text-muted">No similar listeners found yet.</li>}
+              </ul>
+            )}
+          </div>
 
-      <div className="px-5">
-        <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-muted mb-4">Top rated this week</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {trending?.map((a) => {
-            const cover = a.cover_url || mockCoverFor(a.album_key);
-            return (
-              <Link to="/album/$id" params={{ id: a.album_key }} key={a.album_key}>
-                <div className="aspect-square w-full rounded-xs overflow-hidden bg-secondary [container-type:inline-size]">
-                  <AlbumCover src={cover} title={a.title} artist={a.artist} className="w-full h-full" />
-                </div>
-                <p className="text-xs font-bold mt-2 truncate">{a.title}</p>
-                <p className="text-[10px] text-muted truncate">{a.artist}</p>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+          <div className="px-5 mb-8">
+            <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-accent mb-4">Albums for your taste</h2>
+            {albumsLoading ? <Loader2 className="size-5 animate-spin text-muted" /> : (
+              <div className="grid grid-cols-2 gap-3">
+                {genreAlbums?.map((a: any) => (
+                  <Link to="/album/$id" params={{ id: a.id }} key={a.id}>
+                    <div className="aspect-square w-full rounded-xs overflow-hidden bg-secondary [container-type:inline-size]">
+                      <AlbumCover src={a.cover} title={a.title} artist={a.artist} className="w-full h-full" />
+                    </div>
+                    <p className="text-xs font-bold mt-2 truncate">{a.title}</p>
+                    <p className="text-[10px] text-muted truncate">{a.artist}</p>
+                  </Link>
+                ))}
+                {genreAlbums?.length === 0 && <p className="col-span-2 text-sm text-muted">No albums found for these genres yet.</p>}
+              </div>
+            )}
+          </div>
+
+          <div className="px-5">
+            <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-accent mb-4">Artists for your taste</h2>
+            {artistsLoading ? <Loader2 className="size-5 animate-spin text-muted" /> : (
+              <ul className="divide-y divide-border">
+                {genreArtists?.map((a: any) => (
+                  <li key={a.id}>
+                    <Link to="/artist/$id" params={{ id: a.id }} className="py-2.5 flex items-center gap-3">
+                      {a.image ? <img src={a.image} alt={a.name} loading="lazy" className="size-10 rounded-full object-cover" /> : <Avatar handle={a.id} name={a.name} size={40} />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate">{a.name}</p>
+                        <p className="text-[10px] text-muted truncate">{a.genres?.slice(0, 2).join(", ") || "Artist"}</p>
+                      </div>
+                      <span className="text-[10px] font-mono text-muted">→</span>
+                    </Link>
+                  </li>
+                ))}
+                {(genreArtists?.length ?? 0) === 0 && (
+                  <li className="py-6 text-sm text-muted">Log a couple more albums to unlock artist suggestions.</li>
+                )}
+
+              </ul>
+            )}
+          </div>
+        </>
+      )}
     </section>
   );
+}
+
+const SPOTIFY_UNSEARCHABLE_TASTE_TAGS = /^(?:\d0s|\d{2}s|\d{4}s|00s|10s|20s|60s|70s|80s|90s)$/i;
+
+function usableSpotifyGenres(genres: string[]) {
+  const seen = new Set<string>();
+  return genres
+    .map((g) => g.trim().toLowerCase())
+    .filter((g) => g && !SPOTIFY_UNSEARCHABLE_TASTE_TAGS.test(g))
+    .filter((g) => {
+      if (seen.has(g)) return false;
+      seen.add(g);
+      return true;
+    });
 }
 
 function SuggestedUser({ user, score }: { user: { id: string; handle: string; name: string; identity: string | null; avatar_url: string | null }; score: number }) {

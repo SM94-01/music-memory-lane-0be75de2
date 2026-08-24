@@ -80,6 +80,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail;
+      if (typeof path === "string") router.navigate({ to: path });
+    };
+    window.addEventListener("trax:navigate", onNav);
+    return () => window.removeEventListener("trax:navigate", onNav);
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>

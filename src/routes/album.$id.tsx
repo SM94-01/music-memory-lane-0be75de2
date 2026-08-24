@@ -3,7 +3,7 @@ import { MobileShell } from "@/components/MobileShell";
 import { Stars } from "@/components/Stars";
 import { Avatar } from "@/components/Avatar";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Bookmark, BookmarkCheck, Loader2, Send, Music2, X } from "lucide-react";
+import { ArrowLeft, Check, Bookmark, BookmarkCheck, Loader2, Send, Star, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyProfile } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import { AlbumCover } from "@/components/AlbumCover";
 import { ShareAlbumDialog } from "@/components/ShareAlbumDialog";
 import { getSpotifyAlbum, type SpotifyTrack } from "@/lib/spotify";
 
-type AlbumInfo = { title: string; artist: string; year: number | null; cover: string | null; genre: string | null; tracks?: SpotifyTrack[] };
+type AlbumInfo = { title: string; artist: string; artistId?: string | null; year: number | null; cover: string | null; genre: string | null; tracks?: SpotifyTrack[] };
 
 export const Route = createFileRoute("/album/$id")({
   component: AlbumPage,
@@ -79,6 +79,7 @@ function AlbumPage() {
             year: base?.year ?? album.year,
             cover: base?.cover ?? album.cover,
             genre: base?.genre ?? album.genre,
+            artistId: album.artist_id ?? null,
             tracks: album.tracks,
           };
         } catch {}
@@ -108,7 +109,7 @@ function AlbumPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("album_logs")
-        .select("id, rating, review, listened_at, user:profiles!album_logs_user_id_fkey(handle, name, avatar_url)")
+        .select("id, rating, review, best_track, listened_at, user:profiles!album_logs_user_id_fkey(handle, name, avatar_url)")
         .eq("album_key", id)
         .or("rating.not.is.null,review.not.is.null")
         .order("listened_at", { ascending: false }).limit(20);
@@ -132,8 +133,24 @@ function AlbumPage() {
       if (data) setMyLogId(data.id);
       setLogged(true);
     }
+    // Rated albums leave the "to listen" list automatically
+    if (watchId) {
+      await supabase.from("watchlist").delete().eq("id", watchId);
+      setWatchId(null);
+    }
     setSaving(false);
     qc.invalidateQueries();
+    // Prompt for best track after saving, if tracklist available and none picked yet.
+    if (info.tracks && info.tracks.length > 0 && !bestTrack) setPickerOpen(true);
+  }
+
+  async function pickBest(name: string | null) {
+    setBestTrack(name);
+    setPickerOpen(false);
+    if (myLogId) {
+      await supabase.from("album_logs").update({ best_track: name }).eq("id", myLogId);
+      qc.invalidateQueries();
+    }
   }
 
   async function unlog() {
@@ -165,11 +182,41 @@ function AlbumPage() {
 
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl font-extrabold tracking-tighter text-pretty">{info.title}</h1>
-            <p className="text-lg font-medium text-muted">{info.artist}{info.year ? ` • ${info.year}` : ""}</p>
+            <p className="text-lg font-medium text-muted">
+              {info.artistId ? (
+                <Link to="/artist/$id" params={{ id: info.artistId }} className="hover:text-accent underline-offset-4 hover:underline">
+                  {info.artist}
+                </Link>
+              ) : (
+                info.artist
+              )}
+              {info.year ? ` • ${info.year}` : ""}
+            </p>
             {info.genre && (
               <span className="mt-2 inline-block w-fit px-2 py-0.5 bg-accent/10 border border-accent/20 text-accent text-[10px] font-mono uppercase">{info.genre}</span>
             )}
           </div>
+
+          {info.tracks && info.tracks.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-accent mb-4">Tracklist</h2>
+              <ul className="divide-y divide-border">
+                {info.tracks.map((t) => {
+                  const isBest = bestTrack === t.name;
+                  return (
+                    <li key={t.id} className="py-2.5 flex items-center gap-3">
+                      <span className="text-[10px] font-mono text-muted w-5 text-right">{t.track_number ?? "•"}</span>
+                      <span className={`text-sm flex-1 truncate flex items-center gap-1.5 ${isBest ? "font-bold text-accent" : ""}`}>
+                        {isBest && <Star className="size-3.5 shrink-0 fill-accent text-accent" aria-label="Top track" />}
+                        {t.name}
+                      </span>
+                      <span className="text-[10px] font-mono text-muted">{formatDuration(t.duration_ms)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <div className="py-6 border-y border-border my-6">
             <div className="flex items-center justify-center gap-1 text-3xl leading-none">
@@ -236,33 +283,7 @@ function AlbumPage() {
             <Send className="size-4" /> Share with a friend
           </button>
 
-          {info.tracks && info.tracks.length > 0 && (
-            <button
-              onClick={() => setPickerOpen(true)}
-              className="mt-3 w-full py-3 font-bold text-sm rounded-sm border border-border text-muted hover:text-accent hover:border-accent flex items-center justify-center gap-2"
-            >
-              <Music2 className="size-4" />
-              {bestTrack ? `Best track: ${bestTrack}` : "Pick best track (optional)"}
-            </button>
-          )}
 
-          {info.tracks && info.tracks.length > 0 && (
-            <div className="mt-10">
-              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-accent mb-4">Tracklist</h2>
-              <ul className="divide-y divide-border">
-                {info.tracks.map((t) => {
-                  const isBest = bestTrack === t.name;
-                  return (
-                    <li key={t.id} className="py-2.5 flex items-center gap-3">
-                      <span className="text-[10px] font-mono text-muted w-5 text-right">{t.track_number ?? "•"}</span>
-                      <span className={`text-sm flex-1 truncate ${isBest ? "font-bold text-accent" : ""}`}>{t.name}</span>
-                      <span className="text-[10px] font-mono text-muted">{formatDuration(t.duration_ms)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
 
 
           <div className="mt-10">
@@ -271,13 +292,18 @@ function AlbumPage() {
               {(!reviews || reviews.length === 0) && <p className="text-sm text-muted">No reviews yet.</p>}
               {reviews?.map((r: any) => (
                 <div key={r.id} className="border-t border-border pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Link to="/u/$handle" params={{ handle: r.user?.handle ?? "" }} className="flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-2 gap-3">
+                    <Link to="/u/$handle" params={{ handle: r.user?.handle ?? "" }} className="flex items-center gap-2 min-w-0">
                       <Avatar handle={r.user?.handle ?? ""} name={r.user?.name} url={r.user?.avatar_url} size={24} />
-                      <span className="text-sm font-bold">{r.user?.name}</span>
+                      <span className="text-sm font-bold truncate">{r.user?.name}</span>
                     </Link>
                     {r.rating && <Stars value={r.rating} />}
                   </div>
+                  {r.best_track && (
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-accent mb-1 flex items-center gap-1.5">
+                      <Star className="size-3 fill-accent text-accent" /> Top track: <span className="text-foreground normal-case tracking-normal">{r.best_track}</span>
+                    </p>
+                  )}
                   {r.review && <p className="text-sm text-muted leading-relaxed">{r.review}</p>}
                 </div>
               ))}
@@ -296,7 +322,7 @@ function AlbumPage() {
             <ul className="overflow-y-auto divide-y divide-border">
               {bestTrack && (
                 <li>
-                  <button onClick={() => { setBestTrack(null); setPickerOpen(false); }} className="w-full py-3 px-4 text-left text-xs font-mono uppercase tracking-widest text-muted hover:text-destructive">
+                  <button onClick={() => pickBest(null)} className="w-full py-3 px-4 text-left text-xs font-mono uppercase tracking-widest text-muted hover:text-destructive">
                     Clear selection
                   </button>
                 </li>
@@ -306,7 +332,7 @@ function AlbumPage() {
                 return (
                   <li key={t.id}>
                     <button
-                      onClick={() => { setBestTrack(t.name); setPickerOpen(false); }}
+                      onClick={() => pickBest(t.name)}
                       className={`w-full py-3 px-4 flex items-center gap-3 text-left ${isBest ? "bg-accent/10" : "hover:bg-secondary/40"}`}
                     >
                       <span className="text-[10px] font-mono text-muted w-5 text-right">{t.track_number ?? "•"}</span>

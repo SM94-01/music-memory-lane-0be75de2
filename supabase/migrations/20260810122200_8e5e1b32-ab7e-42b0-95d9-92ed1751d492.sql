@@ -1,0 +1,1 @@
+UPDATE public.notification_prefs SET watchlist_reminders = true, inactivity_reminders = true WHERE watchlist_reminders = false OR inactivity_reminders = false;

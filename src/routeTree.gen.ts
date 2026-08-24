@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RediscoverRouteImport } from './routes/rediscover'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AddRouteImport } from './routes/add'
@@ -19,6 +20,11 @@ import { Route as MessagesHandleRouteImport } from './routes/messages.$handle'
 import { Route as ArtistIdRouteImport } from './routes/artist.$id'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
 
+const RediscoverRoute = RediscoverRouteImport.update({
+  id: '/rediscover',
+  path: '/rediscover',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
+  '/rediscover': typeof RediscoverRoute
   '/album/$id': typeof AlbumIdRoute
   '/artist/$id': typeof ArtistIdRoute
   '/messages/$handle': typeof MessagesHandleRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
+  '/rediscover': typeof RediscoverRoute
   '/album/$id': typeof AlbumIdRoute
   '/artist/$id': typeof ArtistIdRoute
   '/messages/$handle': typeof MessagesHandleRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/add': typeof AddRoute
   '/auth': typeof AuthRoute
   '/profile': typeof ProfileRoute
+  '/rediscover': typeof RediscoverRoute
   '/album/$id': typeof AlbumIdRoute
   '/artist/$id': typeof ArtistIdRoute
   '/messages/$handle': typeof MessagesHandleRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/auth'
     | '/profile'
+    | '/rediscover'
     | '/album/$id'
     | '/artist/$id'
     | '/messages/$handle'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/auth'
     | '/profile'
+    | '/rediscover'
     | '/album/$id'
     | '/artist/$id'
     | '/messages/$handle'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/auth'
     | '/profile'
+    | '/rediscover'
     | '/album/$id'
     | '/artist/$id'
     | '/messages/$handle'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   AddRoute: typeof AddRoute
   AuthRoute: typeof AuthRoute
   ProfileRoute: typeof ProfileRoute
+  RediscoverRoute: typeof RediscoverRoute
   AlbumIdRoute: typeof AlbumIdRoute
   ArtistIdRoute: typeof ArtistIdRoute
   MessagesHandleRoute: typeof MessagesHandleRoute
@@ -149,6 +162,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/rediscover': {
+      id: '/rediscover'
+      path: '/rediscover'
+      fullPath: '/rediscover'
+      preLoaderRoute: typeof RediscoverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -221,6 +241,7 @@ const rootRouteChildren: RootRouteChildren = {
   AddRoute: AddRoute,
   AuthRoute: AuthRoute,
   ProfileRoute: ProfileRoute,
+  RediscoverRoute: RediscoverRoute,
   AlbumIdRoute: AlbumIdRoute,
   ArtistIdRoute: ArtistIdRoute,
   MessagesHandleRoute: MessagesHandleRoute,
