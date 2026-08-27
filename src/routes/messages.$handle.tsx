@@ -75,8 +75,8 @@ function ChatPage() {
 
   return (
     <MobileShell hideNav>
-      <div className="flex flex-col h-[calc(100dvh-6rem)] -mb-32">
-        <header className="px-5 py-3 border-b border-border flex items-center gap-3">
+      <div className="fixed inset-x-0 bottom-0 top-[calc(4.5rem+env(safe-area-inset-top))] bg-background flex flex-col z-30">
+        <header className="flex-shrink-0 px-5 py-3 border-b border-border flex items-center gap-3">
           <button onClick={() => router.history.back()} className="p-1 -m-1 text-muted hover:text-foreground" aria-label="Back">
             <ArrowLeft className="size-4" />
           </button>
@@ -93,7 +93,7 @@ function ChatPage() {
           )}
         </header>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-2">
           {isLoading && <Loader2 className="size-5 animate-spin text-muted mx-auto" />}
           {!isLoading && messages && messages.length === 0 && (
             <p className="text-sm text-muted text-center pt-12">No messages yet. Say hi.</p>
@@ -110,7 +110,7 @@ function ChatPage() {
           })}
         </div>
 
-        <div className="px-3 py-3 border-t border-border flex items-center gap-2">
+        <div className="flex-shrink-0 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border flex items-center gap-2">
           <input
             value={text} onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
