@@ -12,7 +12,8 @@ export function useUnreadNotifications() {
   const query = useQuery({
     queryKey: ["unreadNotifs", me?.id, seenAt],
     enabled: !!me,
-    refetchInterval: 60_000,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       if (!me) return 0;
       const meId = me.id;
