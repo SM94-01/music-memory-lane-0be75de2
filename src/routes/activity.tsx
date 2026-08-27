@@ -8,7 +8,8 @@ import { SwipeToDelete } from "@/components/SwipeToDelete";
 import { ArrowLeft, Heart, MessageCircle, UserPlus, Send, Loader2, Sparkles } from "lucide-react";
 import { IDENTITIES } from "@/lib/identities";
 import { uiState } from "@/lib/ui-state";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useMarkNotificationsRead } from "@/lib/unread";
 import { formatDistanceToNowStrict } from "date-fns";
 
 export const Route = createFileRoute("/activity")({
@@ -21,6 +22,11 @@ type Tab = "notifications" | "messages";
 function ActivityPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>(uiState.activityTab);
+  const markRead = useMarkNotificationsRead();
+  useEffect(() => {
+    void markRead();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const switchTab = (t: Tab) => {
     uiState.activityTab = t;
     setTab(t);
