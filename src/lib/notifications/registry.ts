@@ -10,7 +10,7 @@ import type { NotificationEvent, NotificationPrefKey, PushPayload } from "./type
  * No other file needs to change.
  */
 export interface EventHandler<E extends NotificationEvent> {
-  prefKey: NotificationPrefKey;
+  prefKey: NotificationPrefKey | null;
   buildPayload: (event: E, recipientId: string) => Omit<PushPayload, "user_id">;
   dedupKey: (event: E, recipientId: string) => string;
 }
@@ -58,5 +58,14 @@ export const eventRegistry: Registry = {
       data: { type: "album_share", actor_id: e.actorId, album_key: e.albumKey },
     }),
     dedupKey: (e, r) => `share:${e.actorId}:${r}:${e.albumKey}:${Math.floor(Date.now() / 10_000)}`,
+  },
+  message: {
+    prefKey: null,
+    buildPayload: (e) => ({
+      title: e.actorName ?? "New message",
+      body: e.preview?.slice(0, 100) || "Sent you a message",
+      data: { type: "message", actor_id: e.actorId },
+    }),
+    dedupKey: (e, r) => `message:${e.actorId}:${r}:${Math.floor(Date.now() / 2_000)}:${e.preview ?? ""}`,
   },
 };

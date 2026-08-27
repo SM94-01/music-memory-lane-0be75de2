@@ -6,6 +6,7 @@ import { useMyProfile } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Send, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { notificationService } from "@/lib/notifications";
 
 export const Route = createFileRoute("/messages/$handle")({
   head: ({ params }) => ({ meta: [{ title: `Chat with @${params.handle} — TraX` }] }),
@@ -60,6 +61,13 @@ function ChatPage() {
     });
     setSending(false);
     if (!error) {
+      void notificationService.notify({
+        type: "message",
+        actorId: me.id,
+        recipientId: other.id,
+        actorName: me.name ?? me.handle,
+        preview: text.trim(),
+      });
       setText("");
       qc.invalidateQueries({ queryKey: ["chat"] });
     }

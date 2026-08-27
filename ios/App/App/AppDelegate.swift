@@ -1,36 +1,22 @@
 import UIKit
 import Capacitor
-import FirebaseCore
-import FirebaseMessaging
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        FirebaseApp.configure()
-        Messaging.messaging().delegate = self
         return true
     }
 
-    // MARK: - Push notifications (APNs -> FCM token bridge for Capacitor)
+    // MARK: - Push notifications
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        Messaging.messaging().apnsToken = deviceToken
-        Messaging.messaging().token { token, error in
-            if let token = token {
-                NotificationCenter.default.post(
-                    name: .capacitorDidRegisterForRemoteNotifications,
-                    object: token
-                )
-            } else {
-                NotificationCenter.default.post(
-                    name: .capacitorDidFailToRegisterForRemoteNotifications,
-                    object: error
-                )
-            }
-        }
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications,
+            object: deviceToken
+        )
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
@@ -40,11 +26,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         )
     }
 
-    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        guard let fcmToken = fcmToken else { return }
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         NotificationCenter.default.post(
-            name: .capacitorDidRegisterForRemoteNotifications,
-            object: fcmToken
+            name: Notification.Name("didReceiveRemoteNotification"),
+            object: completionHandler,
+            userInfo: userInfo
         )
     }
 
