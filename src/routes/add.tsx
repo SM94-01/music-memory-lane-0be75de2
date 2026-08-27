@@ -9,7 +9,7 @@ import { useMyProfile } from "@/lib/auth";
 import { fetchTasteFingerprint } from "@/lib/taste";
 import { AlbumCover } from "@/components/AlbumCover";
 import { searchSpotifyAlbums, searchSpotifyArtists, searchSpotifyByGenre, getSpotifyFeatured, getSpotifyNewReleases, type SpotifyAlbum, type SpotifyArtist } from "@/lib/spotify";
-import { uiState } from "@/lib/ui-state";
+import { uiState, enterSection } from "@/lib/ui-state";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/add")({
@@ -20,6 +20,7 @@ export const Route = createFileRoute("/add")({
 type Mode = "albums" | "artists" | "genres";
 
 function AddPage() {
+  enterSection("add");
   const [mode, setMode] = useState<Mode>(uiState.addMode);
   const switchMode = (m: Mode) => {
     uiState.addMode = m;

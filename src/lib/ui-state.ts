@@ -15,3 +15,19 @@ export const uiState = {
   addGenre: null as string | null,
   profileTab: "posts" as ProfileTab,
 };
+
+// Remembering the last tab only applies *within* a macro section. Switching
+// between Explore / Add music / Profile resets everything back to defaults.
+type Section = "explore" | "add" | "profile";
+let currentSection: Section | null = null;
+
+export function enterSection(section: Section) {
+  if (currentSection === section) return;
+  currentSection = section;
+  uiState.exploreTab = "following";
+  uiState.activityTab = "notifications";
+  uiState.addMode = "albums";
+  uiState.addGenre = null;
+  uiState.profileTab = "posts";
+}
+

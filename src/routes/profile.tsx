@@ -3,6 +3,7 @@ import { MobileShell } from "@/components/MobileShell";
 import { ProfileView } from "@/components/ProfileView";
 import { useMyProfile } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
+import { enterSection } from "@/lib/ui-state";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title: "Profile — TraX" }] }),
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
+  enterSection("profile");
   const { data: me, isLoading } = useMyProfile();
   return (
     <MobileShell>

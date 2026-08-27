@@ -14,7 +14,8 @@ import { AlbumCover } from "@/components/AlbumCover";
 import { notificationService } from "@/lib/notifications";
 import { fetchTasteFingerprint } from "@/lib/taste";
 import { searchSpotifyByGenre, searchSpotifyArtists, getSpotifyArtist } from "@/lib/spotify";
-import { uiState } from "@/lib/ui-state";
+import { uiState, enterSection } from "@/lib/ui-state";
+import { useUnreadNotifications } from "@/lib/unread";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Explore — TraX" }] }),
@@ -24,7 +25,9 @@ export const Route = createFileRoute("/")({
 type Tab = "following" | "suggested";
 
 function ExplorePage() {
+  enterSection("explore");
   const [tab, setTab] = useState<Tab>(uiState.exploreTab);
+  const { data: unread } = useUnreadNotifications();
   const switchTab = (t: Tab) => {
     uiState.exploreTab = t;
     setTab(t);
@@ -36,10 +39,15 @@ function ExplorePage() {
           <h1 className="text-3xl font-extrabold tracking-tighter">Explore</h1>
           <Link
             to="/activity"
-            aria-label="Activity"
-            className="size-10 -mr-2 grid place-items-center rounded-full text-muted hover:text-foreground hover:bg-secondary/60"
+            aria-label={unread ? `Activity, ${unread} unread` : "Activity"}
+            className="relative size-10 -mr-2 grid place-items-center rounded-full text-muted hover:text-foreground hover:bg-secondary/60"
           >
             <Bell className="size-5" />
+            {!!unread && (
+              <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-accent text-background text-[10px] font-mono font-bold leading-none">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
           </Link>
         </div>
         <div className="flex gap-1 p-1 bg-secondary/60 rounded-full mb-6">
@@ -47,6 +55,7 @@ function ExplorePage() {
           <TabBtn active={tab === "suggested"} onClick={() => switchTab("suggested")}>Suggested</TabBtn>
         </div>
       </div>
+
       {tab === "following" ? <FollowingFeed onDiscover={() => switchTab("suggested")} /> : <SuggestedTab />}
     </MobileShell>
   );
