@@ -445,6 +445,7 @@ export type Database = {
           identity: string | null
           is_seed: boolean
           name: string
+          notifications_seen_at: string
           updated_at: string
         }
         Insert: {
@@ -458,6 +459,7 @@ export type Database = {
           identity?: string | null
           is_seed?: boolean
           name: string
+          notifications_seen_at?: string
           updated_at?: string
         }
         Update: {
@@ -471,6 +473,7 @@ export type Database = {
           identity?: string | null
           is_seed?: boolean
           name?: string
+          notifications_seen_at?: string
           updated_at?: string
         }
         Relationships: []

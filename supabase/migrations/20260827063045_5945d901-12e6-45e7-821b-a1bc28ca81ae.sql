@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notifications_seen_at timestamptz NOT NULL DEFAULT now();
