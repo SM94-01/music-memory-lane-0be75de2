@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyProfile } from "@/lib/auth";
@@ -5,14 +6,16 @@ import { useMyProfile } from "@/lib/auth";
 /** Number of notification-worthy events that happened after the user last opened Activity. */
 export function useUnreadNotifications() {
   const { data: me } = useMyProfile();
+  const queryClient = useQueryClient();
   const seenAt = (me as { notifications_seen_at?: string } | undefined)?.notifications_seen_at;
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["unreadNotifs", me?.id, seenAt],
     enabled: !!me,
     refetchInterval: 60_000,
     queryFn: async () => {
-      const meId = me!.id;
+      if (!me) return 0;
+      const meId = me.id;
       const since = seenAt ?? new Date(0).toISOString();
 
       const { data: myLogs } = await supabase.from("album_logs").select("id").eq("user_id", meId);
@@ -37,6 +40,24 @@ export function useUnreadNotifications() {
       );
     },
   });
+
+  useEffect(() => {
+    if (!me) return;
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["unreadNotifs"] });
+    window.addEventListener("trax:notification-received", refresh);
+    const channel = supabase
+      .channel(`unread-${me.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows", filter: `following_id=eq.${me.id}` }, refresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "album_shares", filter: `to_user_id=eq.${me.id}` }, refresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "identity_unlocks", filter: `user_id=eq.${me.id}` }, refresh)
+      .subscribe();
+    return () => {
+      window.removeEventListener("trax:notification-received", refresh);
+      void supabase.removeChannel(channel);
+    };
+  }, [me, queryClient]);
+
+  return query;
 }
 
 /** Marks every current notification as read. */

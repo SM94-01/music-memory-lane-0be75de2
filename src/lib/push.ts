@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { PushNotifications } from "@capacitor/push-notifications";
+import { FirebaseMessaging } from "@capacitor-firebase/messaging";
 import { supabase } from "@/integrations/supabase/client";
 
 let initialized = false;
@@ -15,9 +15,9 @@ export async function initPushNotifications(): Promise<void> {
     if (!Capacitor.isNativePlatform()) return;
 
     // 1. Permissions
-    let perm = await PushNotifications.checkPermissions();
+    let perm = await FirebaseMessaging.checkPermissions();
     if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
-      perm = await PushNotifications.requestPermissions();
+      perm = await FirebaseMessaging.requestPermissions();
     }
     if (perm.receive !== "granted") {
       console.warn("[push] permission not granted:", perm.receive);
@@ -25,11 +25,10 @@ export async function initPushNotifications(): Promise<void> {
     }
 
     // 2. Wire listeners BEFORE register so the first token isn't lost
-    await PushNotifications.removeAllListeners();
+    await FirebaseMessaging.removeAllListeners();
 
-    PushNotifications.addListener("registration", async (t) => {
+    const saveToken = async (token: string) => {
       try {
-        const token = t.value;
         const platform = Capacitor.getPlatform() as "android" | "ios" | "web";
         const { data: profile } = await supabase
           .from("profiles")
@@ -50,27 +49,30 @@ export async function initPushNotifications(): Promise<void> {
       } catch (e) {
         console.warn("[push] registration handler threw", e);
       }
+    };
+
+    await FirebaseMessaging.addListener("tokenReceived", ({ token }) => {
+      console.log("[push] FCM token received");
+      void saveToken(token);
     });
 
-    PushNotifications.addListener("registrationError", (err) => {
-      console.warn("[push] registrationError", err);
+    await FirebaseMessaging.addListener("notificationReceived", ({ notification }) => {
+      console.log("[push] received", notification.id);
+      window.dispatchEvent(new CustomEvent("trax:notification-received"));
     });
 
-    PushNotifications.addListener("pushNotificationReceived", (n) => {
-      console.log("[push] received", n);
-    });
-
-    PushNotifications.addListener("pushNotificationActionPerformed", (a) => {
-      console.log("[push] action", a);
-      const data = (a.notification?.data ?? {}) as Record<string, string>;
+    await FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
+      const data = (event.notification?.data ?? {}) as Record<string, string>;
       let path: string | null = null;
       if (data.type === "rediscover") path = "/rediscover";
       else if (data.type === "watchlist" && data.album_key) path = `/album/${data.album_key}`;
       if (path) window.dispatchEvent(new CustomEvent("trax:navigate", { detail: path }));
     });
 
-    // 3. Register
-    await PushNotifications.register();
+    // 3. getToken registers with APNs/FCM and returns the FCM token directly.
+    const { token } = await FirebaseMessaging.getToken();
+    console.log("[push] FCM token acquired");
+    await saveToken(token);
     initialized = true;
   } catch (e) {
     console.warn("[push] init failed", e);
@@ -80,7 +82,7 @@ export async function initPushNotifications(): Promise<void> {
 export async function teardownPushNotifications(): Promise<void> {
   try {
     if (!Capacitor.isNativePlatform()) return;
-    await PushNotifications.removeAllListeners();
+    await FirebaseMessaging.removeAllListeners();
     initialized = false;
   } catch (e) {
     console.warn("[push] teardown failed", e);

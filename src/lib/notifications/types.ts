@@ -33,6 +33,13 @@ export type NotificationEvent =
       albumKey: string;
       albumTitle: string;
       actorName?: string;
+    }
+  | {
+      type: "message";
+      actorId: string;
+      recipientId: string;
+      actorName?: string;
+      preview?: string;
     };
 
 export type NotificationType = NotificationEvent["type"];

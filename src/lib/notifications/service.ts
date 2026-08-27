@@ -43,7 +43,7 @@ class NotificationService {
       if (this.isDuplicate(key)) return;
       this.remember(key);
 
-      const allowed = await this.isPrefEnabled(recipientId, handler.prefKey);
+      const allowed = handler.prefKey ? await this.isPrefEnabled(recipientId, handler.prefKey) : true;
       if (!allowed) return;
 
       const payload = handler.buildPayload(event, recipientId);
@@ -59,7 +59,7 @@ class NotificationService {
   // ---------- internal helpers ----------
 
   private async resolveRecipient(event: NotificationEvent): Promise<string | null> {
-    if (event.type === "follow" || event.type === "album_share") return event.recipientId;
+    if (event.type === "follow" || event.type === "album_share" || event.type === "message") return event.recipientId;
     // like / comment: recipient is the owner of the album log.
     const { data, error } = await supabase
       .from("album_logs")
