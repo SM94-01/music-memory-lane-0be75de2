@@ -36,7 +36,7 @@ export function useUnreadNotifications() {
           : Promise.resolve({ count: 0 }),
       ]);
 
-      return [follows, shares, unlocks, likes, comments].reduce(
+      return [follows, shares, unlocks, messages, likes, comments].reduce(
         (sum, r) => sum + ((r as { count: number | null }).count ?? 0),
         0,
       );
