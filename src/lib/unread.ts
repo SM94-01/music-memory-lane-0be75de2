@@ -22,10 +22,11 @@ export function useUnreadNotifications() {
       const logIds = (myLogs ?? []).map((l) => l.id);
 
       const head = { count: "exact" as const, head: true };
-      const [follows, shares, unlocks, likes, comments] = await Promise.all([
+      const [follows, shares, unlocks, messages, likes, comments] = await Promise.all([
         supabase.from("follows").select("*", head).eq("following_id", meId).gt("created_at", since),
         supabase.from("album_shares").select("*", head).eq("to_user_id", meId).gt("created_at", since),
         supabase.from("identity_unlocks").select("*", head).eq("user_id", meId).gt("unlocked_at", since),
+        supabase.from("messages").select("*", head).eq("recipient_id", meId).gt("created_at", since),
         logIds.length
           ? supabase.from("likes").select("*", head).in("log_id", logIds).neq("user_id", meId).gt("created_at", since)
           : Promise.resolve({ count: 0 }),
@@ -50,6 +51,7 @@ export function useUnreadNotifications() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows", filter: `following_id=eq.${me.id}` }, refresh)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "album_shares", filter: `to_user_id=eq.${me.id}` }, refresh)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "identity_unlocks", filter: `user_id=eq.${me.id}` }, refresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `recipient_id=eq.${me.id}` }, refresh)
       .subscribe();
     return () => {
       window.removeEventListener("trax:notification-received", refresh);
